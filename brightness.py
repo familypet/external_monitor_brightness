@@ -16,7 +16,7 @@ class BrightnessControlApp:
         # Initialize monitor data
         self.monitors = []
         self.last_update_time = {}
-        self.previous_brightness = {}  # Track previous brightness values
+        self.previous_slider_values = {}  # Track previous slider values
         self.running = True  # Flag to control the background thread
 
         # Create GUI elements
@@ -48,7 +48,7 @@ class BrightnessControlApp:
                     # Add an 'index' field to uniquely identify monitors without a serial
                     monitor['index'] = i
                     monitor['brightness'] = current_brightness  # Store current brightness
-                    self.previous_brightness[i] = current_brightness  # Initialize previous brightness
+                    self.previous_slider_values[i] = current_brightness  # Initialize previous slider values
                     logging.info(f"Monitor: {monitor['name']}, Serial: {monitor['serial']}, Index: {i}, Current Brightness: {current_brightness}%")
                 except Exception as e:
                     logging.error(f"Error initializing monitor {monitor['name']} (Index: {i}): {e}")
@@ -120,16 +120,16 @@ class BrightnessControlApp:
                     # Update the brightness label immediately
                     monitor['label'].config(text=f"Current Brightness: {slider_value}%")
                     
-                    # Throttle updates to avoid excessive calls
-                    last_update = self.last_update_time.get(monitor['index'], 0)
-                    if current_time - last_update < 0.1:  # Limit updates to every 100ms
-                        continue
-                    
-                    # Update the last update time
-                    self.last_update_time[monitor['index']] = current_time
+                    # Check if the slider value has changed
+                    if slider_value != self.previous_slider_values.get(monitor['index'], -1):
+                        # Minimal throttling to avoid excessive calls
+                        last_update = self.last_update_time.get(monitor['index'], 0)
+                        if current_time - last_update < 0.01:  # Limit updates to every 50ms
+                            continue
+                        
+                        # Update the last update time
+                        self.last_update_time[monitor['index']] = current_time
 
-                    # Check if the brightness has changed
-                    if slider_value != self.previous_brightness[monitor['index']]:
                         try:
                             # Use the monitor's index as a fallback identifier if serial is None
                             display_identifier = monitor['serial'] or monitor['index']
@@ -137,12 +137,12 @@ class BrightnessControlApp:
                             # Apply the brightness to the specific monitor using its identifier
                             sbc.set_brightness(slider_value, display=display_identifier)
                             monitor['brightness'] = slider_value
-                            self.previous_brightness[monitor['index']] = slider_value  # Update previous brightness
+                            self.previous_slider_values[monitor['index']] = slider_value  # Update previous slider value
                             logging.info(f"Brightness set to {slider_value}% for monitor {monitor['name']} (Index: {monitor['index']})")
                         except Exception as e:
                             logging.error(f"Error setting brightness for monitor {monitor['name']} (Index: {monitor['index']}): {e}")
                 
-                time.sleep(0.05)  # Poll every 50ms for smoother updates
+                time.sleep(0.01)  # Poll every 10ms for near-instant updates
 
         # Start the thread
         self.thread = threading.Thread(target=brightness_worker, daemon=True)
